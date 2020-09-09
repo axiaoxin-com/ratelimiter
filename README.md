@@ -2,9 +2,56 @@
 
 token bucket 请求限频的简单版实现
 
-- 提供 lua + nginx + redis 的上层分布式级别的令牌桶限频实现： lua-ngx-ratelimiter
-- 提供进程内存级别的令牌桶限频 gin 中间件： GinMemRatelimiter
-- 提供 redis 分布式级别的令牌桶限频 gin 中间件：GinRedisRatelimiter
+- 提供 lua + nginx + redis 的上层分布式级别的令牌桶限频实现： [lua-ngx-ratelimiter](./lua-ngx-ratelimiter)
+- 提供 [rate](https://github.com/golang/time/tree/master/rate) + [go-cache](https://github.com/patrickmn/go-cache) 的封装 [MemRatelimiter](./mem_ratelimiter.go)
+- 提供 redis + lua 的 [RedisRatelimiter](./redis_ratelimiter.go)
+- 提供进程内存级别的令牌桶限频 gin 中间件： [GinMemRatelimiter](./gin_mem_ratelimiter.go)
+- 提供 redis 分布式级别的令牌桶限频 gin 中间件： [GinRedisRatelimiter](./gin_redis_ratelimiter.go)
+
+## go pkg 安装
+
+```
+go get -u github.com/axiaoxin-com/ratelimiter
+```
+
+## Gin Middleware 用法
+
+**GinMemRatelimiter**
+
+```
+package main
+
+import (
+	"github.com/axiaoxin-com/ratelimiter"
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	r := gin.New()
+	// 每隔 1000*1000 微秒向令牌桶中放入一个 token
+	// 每秒最大允许 1 次请求
+	r.Use(ratelimiter.GinMemRatelimiter(1000*1000, 1))
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, "hi")
+	})
+	r.Run()
+}
+
+```
+
+## Ratelimiter 用法
+
+**MemRatelimiter**
+
+```
+conf := ratelimiter.BucketConfig{
+    Capacity:             1,
+    FillEveryMicrosecond: 1000 * 1000,
+    ExpireSecond:         60,
+}
+limiter := ratelimiter.NewMemRatelimiter(conf)
+limiter.Allow("somekey")
+```
 
 ## 关于令牌桶（ token bucket ）
 
