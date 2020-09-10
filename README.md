@@ -50,7 +50,8 @@ conf := ratelimiter.BucketConfig{
     ExpireSecond:         60,
 }
 limiter := ratelimiter.NewMemRatelimiter(conf)
-limiter.Allow("somekey")
+ctx := context.TODO()
+limiter.Allow(ctx, "somekey")
 ```
 
 ## 关于令牌桶（ token bucket ）

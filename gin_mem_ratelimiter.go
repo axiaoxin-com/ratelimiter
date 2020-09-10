@@ -38,7 +38,7 @@ func GinMemRatelimiterWithConfig(conf GinRatelimiterConfig) gin.HandlerFunc {
 			limitedHandler = conf.LimitedHandler
 		}
 
-		if limiter.Allow(limitKey) {
+		if limiter.Allow(c, limitKey) {
 			c.Next()
 		} else {
 			c.Writer.Header().Set("X-Ratelimiter-Limit", fmt.Sprint(limiter.Limit()))

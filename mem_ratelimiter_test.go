@@ -1,6 +1,7 @@
 package ratelimiter
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -14,8 +15,9 @@ func TestMemRatelimiter(t *testing.T) {
 		ExpireSecond:         60,
 	}
 	limiter := NewMemRatelimiter(conf)
-	assert.True(t, limiter.Allow("key"))
-	assert.False(t, limiter.Allow("key"))
+	ctx := context.Background()
+	assert.True(t, limiter.Allow(ctx, "key"))
+	assert.False(t, limiter.Allow(ctx, "key"))
 	time.Sleep(1 * time.Second)
-	assert.True(t, limiter.Allow("key"))
+	assert.True(t, limiter.Allow(ctx, "key"))
 }

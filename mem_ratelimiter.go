@@ -1,6 +1,7 @@
 package ratelimiter
 
 import (
+	"context"
 	"time"
 
 	"github.com/axiaoxin-com/logging"
@@ -51,7 +52,7 @@ func NewMemRatelimiter(conf BucketConfig) *MemRatelimiter {
 }
 
 // Allow 判断给定 key 是否被允许
-func (r *MemRatelimiter) Allow(key string) bool {
+func (r *MemRatelimiter) Allow(ctx context.Context, key string) bool {
 	limiterI, exists := r.Cache.Get(key)
 	if !exists {
 		r.Limiter.Allow()
