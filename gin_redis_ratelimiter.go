@@ -21,6 +21,7 @@ func GinRedisRatelimiter(rdb *redis.Client, everyMicrosecond, bucketCapacity int
 
 // GinRedisRatelimiterWithConfig 按配置信息生成 redis 限频中间件
 func GinRedisRatelimiterWithConfig(rdb *redis.Client, conf GinRatelimiterConfig) gin.HandlerFunc {
+	limiter := NewRedisRatelimiter(rdb, conf.Bucket)
 	return func(c *gin.Context) {
 		// 获取 limit key
 		var limitKey string
@@ -36,16 +37,10 @@ func GinRedisRatelimiterWithConfig(rdb *redis.Client, conf GinRatelimiterConfig)
 		}
 
 		// 在 redis 中执行 lua 脚本
-		if isLimitedInRedis(rdb, limitKey) {
+		if !limiter.Allow(c, limitKey) {
 			limitedHandler(c)
 			return
 		}
 		c.Next()
 	}
-}
-
-// isLimitedInRedis 在 redis 中判断当前 key 是否被限频
-func isLimitedInRedis(rdb *redis.Client, key string) bool {
-
-	return false
 }

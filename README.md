@@ -36,7 +36,29 @@ func main() {
 	})
 	r.Run()
 }
+```
 
+**GinRedisRatelimiter**
+
+```
+package main
+
+import (
+	"github.com/axiaoxin-com/ratelimiter"
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	r := gin.New()
+	rdb, err := goutils.NewRedisClient(&redis.Options{})
+	// 每隔 1000*1000 微秒向令牌桶中放入一个 token
+	// 每秒最大允许 1 次请求
+	r.Use(ratelimiter.GinRedisRatelimiter(rdb, 1000*1000, 1))
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, "hi")
+	})
+	r.Run()
+}
 ```
 
 ## Ratelimiter 用法
