@@ -4,7 +4,7 @@ import "github.com/go-redis/redis/v8"
 
 // redis 中执行的 lua 脚本判断 key 是否应该被限频
 // 返回 0：无需限频 1：需限频
-var tokenBucketRedisLuaScript = redis.NewScript(`
+var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
     -- 兼容低版本 redis 手动打开允许随机写入 （执行 TIME 指令获取时间）
     -- 避免报错 Write commands not allowed after non deterministic commands. Call redis.replicate_commands() at the start of your script in order to switch to single commands         replication mode.
     -- Redis 出于数据一致性考虑，要求脚本必须是纯函数的形式，也就是说对于一段 Lua 脚本给定相同的参数，重复执行其结果都是相同的。

@@ -54,6 +54,20 @@ ctx := context.TODO()
 limiter.Allow(ctx, "somekey")
 ```
 
+**RedisRatelimiter**
+
+```
+conf := BucketConfig{
+    Capacity:             1,
+    FillEveryMicrosecond: 1000 * 1000,
+    ExpireSecond:         60 * 5,
+}
+rdb, _ := goutils.NewRedisClient(&redis.Options{})
+limiter := NewRedisRatelimiter(rdb, conf)
+ctx := context.Background()
+limiter.Allow(ctx, "key")
+```
+
 ## 关于令牌桶（ token bucket ）
 
 令牌桶限流的原理是系统以一个恒定的速度往固定容量的桶里放入令牌，当有请求进来时，需要先从桶里获取并消耗一个令牌，当桶里没有令牌可取时，则拒绝服务或让请求等待。
