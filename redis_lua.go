@@ -73,8 +73,8 @@ var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
 
     -- 无可用 token ， 返回 1 限流
     if now_token_count <= 0 then
-        -- 更新 redis 中的数据，被限流不消耗 now_token_count
-        redis.call("HMSET", p_key, "last_fill_timestamp", now_timestamp, "remain_token_count", now_token_count)
+        -- 更新 redis 中的数据，被限流不消耗 now_token_count，不重置上次填充时间
+        redis.call("HMSET", p_key, "last_fill_timestamp", last_fill_timestamp, "remain_token_count", now_token_count)
         -- 设置 redis 的过期时间
         redis.call("EXPIRE", p_key, p_expire_second)
         redis.log(redis.LOG_DEBUG, "ratelimiter: call HMSET for updating bucket")
