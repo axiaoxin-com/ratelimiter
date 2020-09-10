@@ -1,0 +1,21 @@
+language: go
+
+go:
+  - "1.13.x"
+  - "1.14.x"
+  - "1.15.x"
+  - "master"
+
+os:
+  - linux
+
+go_import_path: github.com/axiaoxin-com/ratelimiter
+
+env:
+  - GO111MODULE=on
+
+services:
+  - redis
+
+script:
+  - go test -race -coverprofile=coverage.txt -covermode=atomic -v ./...
