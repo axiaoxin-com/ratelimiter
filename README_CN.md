@@ -3,8 +3,7 @@
 [![Build Status](https://travis-ci.org/axiaoxin-com/ratelimiter.svg?branch=master)](https://travis-ci.org/axiaoxin-com/ratelimiter)
 [![go report card](https://goreportcard.com/badge/github.com/axiaoxin-com/ratelimiter)](https://goreportcard.com/report/github.com/axiaoxin-com/ratelimiter)
 
-
-token bucket 请求限频的简单版实现
+token bucket 请求限频的简单版实现，支持进程内存和 redis 分布式限频（以及 gin 中间件）
 
 - 提供 lua + nginx + redis 的上层分布式级别的令牌桶限频实现： [lua-ngx-ratelimiter](./lua-ngx-ratelimiter)
 - 提供 [rate](https://github.com/golang/time/tree/master/rate) + [go-cache](https://github.com/patrickmn/go-cache) 的封装 [MemRatelimiter](./mem_ratelimiter.go)

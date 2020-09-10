@@ -5,7 +5,9 @@
 
 [中文 README](./README_CN.md)
 
-Simple version implementation of token bucket request frequency limiting
+Simple version implementation of token bucket request frequency limiting.
+
+ratelimiter library that supports in-memory and distributed eventually consistent redis stores (includes Gin middleware)
 
 - [lua-ngx-ratelimiter](./lua-ngx-ratelimiter): a token bucket frequency limiting implementation of lua + nginx + redis
 - [MemRatelimiter](./mem_ratelimiter.go): a process memory limiter implemented with [rate](https://github.com/golang/time/tree/master/rate) + [go-cache](https://github.com/patrickmn/go-cache)
