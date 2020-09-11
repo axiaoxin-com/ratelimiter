@@ -32,13 +32,13 @@ var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
         -- 本次填充时间戳（秒）
         local now_timestamp_array = redis.call("TIME")
         -- 微秒级时间戳
-        local last_fill_timestamp = tonumber(now_timestamp_array[1]) * 1000000 + tonumber(now_timestamp_array[2])
-        redis.log(redis.LOG_DEBUG, "ratelimiter: last_fill_timestamp:" .. last_fill_timestamp .. ", remain_token_count:" .. p_bucket_capacity)
+        local last_consume_timestamp = tonumber(now_timestamp_array[1]) * 1000000 + tonumber(now_timestamp_array[2])
+        redis.log(redis.LOG_DEBUG, "ratelimiter: last_consume_timestamp:" .. last_consume_timestamp .. ", remain_token_count:" .. p_bucket_capacity)
         -- 首次请求 默认为满桶  消耗一个 token
         local remain_token_count = p_bucket_capacity - 1
 
         -- 将当前秒级时间戳和剩余 token 数保存到 redis
-        redis.call("HMSET", p_key, "last_fill_timestamp", last_fill_timestamp, "remain_token_count", remain_token_count)
+        redis.call("HMSET", p_key, "last_consume_timestamp", last_consume_timestamp, "remain_token_count", remain_token_count)
         -- 设置 redis 的过期时间
         redis.call("EXPIRE", p_key, p_expire_second)
         redis.log(redis.LOG_DEBUG, "ratelimiter: call HMSET for creating bucket")
@@ -48,19 +48,19 @@ var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
 
     -- 桶存在时，重新计算填充 token
     -- 获取 redis 中保存的上次填充时间和剩余 token 数
-    local array = redis.call("HMGET", p_key, "last_fill_timestamp", "remain_token_count")
+    local array = redis.call("HMGET", p_key, "last_consume_timestamp", "remain_token_count")
     if array == nil then
         redis.log(redis.LOG_WARNING, "ratelimiter: HMGET return nil for key:" .. p_key)
         redis.log(redis.LOG_DEBUG, "------------ ratelimiter script end ------------")
         return 0
     end
-    local last_fill_timestamp, remain_token_count = tonumber(array[1]), tonumber(array[2])
-    redis.log(redis.LOG_DEBUG, "ratelimiter: last_fill_timestamp:" .. last_fill_timestamp .. ", remain_token_count:" .. remain_token_count)
+    local last_consume_timestamp, remain_token_count = tonumber(array[1]), tonumber(array[2])
+    redis.log(redis.LOG_DEBUG, "ratelimiter: last_consume_timestamp:" .. last_consume_timestamp .. ", remain_token_count:" .. remain_token_count)
 
     -- 计算当前时间距离上次填充 token 过了多少微秒
     local now_timestamp_array = redis.call("TIME")
     local now_timestamp = tonumber(now_timestamp_array[1]) * 1000000 + tonumber(now_timestamp_array[2])
-    local duration_microsecond = math.max(now_timestamp - last_fill_timestamp, 0)
+    local duration_microsecond = math.max(now_timestamp - last_consume_timestamp, 0)
     -- 根据配置计算 token 的填充速率: x token/μs
     local fill_rate = p_fill_count / p_interval_microsecond
     redis.log(redis.LOG_DEBUG, "ratelimiter: now_timestamp:" .. now_timestamp .. ", duration_microsecond:" .. duration_microsecond .. ", fill_rate:" .. fill_rate)
@@ -74,7 +74,7 @@ var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
     -- 无可用 token ， 返回 1 限流
     if now_token_count <= 0 then
         -- 更新 redis 中的数据，被限流不消耗 now_token_count，不重置上次填充时间
-        redis.call("HMSET", p_key, "last_fill_timestamp", last_fill_timestamp, "remain_token_count", now_token_count)
+        redis.call("HMSET", p_key, "last_consume_timestamp", last_consume_timestamp, "remain_token_count", now_token_count)
         -- 设置 redis 的过期时间
         redis.call("EXPIRE", p_key, p_expire_second)
         redis.log(redis.LOG_DEBUG, "ratelimiter: call HMSET for updating bucket")
@@ -83,7 +83,7 @@ var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
     end
 
     -- 更新 redis 中的数据, 消耗一个 token
-    redis.call("HMSET", p_key, "last_fill_timestamp", now_timestamp, "remain_token_count", now_token_count - 1)
+    redis.call("HMSET", p_key, "last_consume_timestamp", now_timestamp, "remain_token_count", now_token_count - 1)
     -- 设置 redis 的过期时间
     redis.call("EXPIRE", p_key, p_expire_second)
     redis.log(redis.LOG_DEBUG, "ratelimiter: call HMSET for updating bucket")
