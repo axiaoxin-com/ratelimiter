@@ -12,7 +12,11 @@ import (
 func TestGinMemRatelimiter(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(GinMemRatelimiter(1000*1000, 1))
+	r.Use(GinMemRatelimiter(GinRatelimiterConfig{
+		TokenBucketConfig: func(c *gin.Context) (time.Duration, int) {
+			return 1 * time.Second, 1
+		},
+	}))
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, "hi")
 	})

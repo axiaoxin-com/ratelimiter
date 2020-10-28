@@ -16,7 +16,11 @@ func TestGinRedisRatelimiter(t *testing.T) {
 	r := gin.New()
 	rdb, err := goutils.NewRedisClient(&redis.Options{})
 	require.Nil(t, err)
-	r.Use(GinRedisRatelimiter(rdb, 1000*1000, 1))
+	r.Use(GinRedisRatelimiter(rdb, GinRatelimiterConfig{
+		TokenBucketConfig: func(c *gin.Context) (time.Duration, int) {
+			return 1 * time.Second, 1
+		},
+	}))
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, "hi")
 	})

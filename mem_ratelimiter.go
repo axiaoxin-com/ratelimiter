@@ -12,57 +12,50 @@ import (
 // MemRatelimiter  进程内存 limiter
 type MemRatelimiter struct {
 	*rate.Limiter
-	Bucket BucketConfig
 	*cache.Cache
+	Expire time.Duration
 }
 
+var (
+	// MemRatelimiterCacheExpiration MemRatelimiter key 的过期时间
+	MemRatelimiterCacheExpiration = time.Minute * 60
+	// MemRatelimiterCacheCleanInterval MemRatelimiter 过期 key 的清理时间间隔
+	MemRatelimiterCacheCleanInterval = time.Minute * 60
+)
+
 // NewMemRatelimiter 根据配置信息创建 mem limiter
-func NewMemRatelimiter(conf BucketConfig) *MemRatelimiter {
-	// 创建 limiter
-	every := defaultBucketFillEveryMicrosecond
-	if conf.FillEveryMicrosecond > 0 {
-		every = conf.FillEveryMicrosecond
-	}
-	limit := rate.Every(time.Duration(every) * time.Microsecond)
-	burst := defaultBucketCapacity
-	if conf.Capacity > 0 {
-		burst = conf.Capacity
-	}
-	expire := defaultBucketExpireSecond
-	if conf.ExpireSecond > 0 {
-		expire = conf.ExpireSecond
-	}
-	limiter := rate.NewLimiter(limit, burst)
+func NewMemRatelimiter() *MemRatelimiter {
 	// 创建 mem cache
-	defaultExpiration := time.Duration(defaultBucketExpireSecond)
-	if conf.ExpireSecond > 0 {
-		defaultExpiration = time.Duration(conf.ExpireSecond)
-	}
-	cleanupInterval := time.Duration(defaultExpiration + 5)
-	memCache := cache.New(defaultExpiration*time.Second, cleanupInterval*time.Second)
+	memCache := cache.New(MemRatelimiterCacheExpiration, MemRatelimiterCacheCleanInterval)
 	return &MemRatelimiter{
-		Limiter: limiter,
-		Bucket: BucketConfig{
-			FillEveryMicrosecond: every,
-			Capacity:             burst,
-			ExpireSecond:         expire,
-		},
 		Cache: memCache,
 	}
 }
 
-// Allow 判断给定 key 是否被允许
-func (r *MemRatelimiter) Allow(ctx context.Context, key string) bool {
+// Allow 使用 time/rate 的 token bucket 算法判断给定 key 和对应的限制速率下是否被允许
+// tokenFillInterval 每隔多长时间往桶中放一个 Token
+// bucketSize 代表 Token 桶的容量大小
+func (r *MemRatelimiter) Allow(ctx context.Context, key string, tokenFillInterval time.Duration, bucketSize int) bool {
+	// 参数小于 0 时不限制
+	if tokenFillInterval.Seconds() <= 0 || bucketSize <= 0 {
+		return true
+	}
+
+	tokenRate := rate.Every(tokenFillInterval)
 	limiterI, exists := r.Cache.Get(key)
 	if !exists {
-		r.Limiter.Allow()
-		r.Cache.Set(key, r.Limiter, time.Duration(r.Bucket.ExpireSecond)*time.Second)
+		limiter := rate.NewLimiter(tokenRate, bucketSize)
+		limiter.Allow()
+		r.Cache.Set(key, limiter, MemRatelimiterCacheExpiration)
 		return true
 	}
 
 	if limiter, ok := limiterI.(*rate.Limiter); ok {
-		return limiter.Allow()
+		isAllow := limiter.Allow()
+		r.Cache.Set(key, limiter, MemRatelimiterCacheExpiration)
+		return isAllow
 	}
+
 	logging.Error(nil, "MemRatelimiter assert limiter error")
 	return true
 
