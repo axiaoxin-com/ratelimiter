@@ -23,21 +23,38 @@ go get -u github.com/axiaoxin-com/ratelimiter
 
 ## Gin Middleware Example
 
-**GinMemRatelimiter**
+**[GinMemRatelimiter](./example/gin_mem_ratelimiter.go)**
 
 ```
 package main
 
 import (
+	"time"
+
 	"github.com/axiaoxin-com/ratelimiter"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	r := gin.New()
-	// Put a token into the token bucket every 1000 * 1000 microseconds
+	// Put a token into the token bucket every 1s
 	// Maximum 1 request allowed per second
-	r.Use(ratelimiter.GinMemRatelimiter(1000*1000, 1))
+	r.Use(ratelimiter.GinMemRatelimiter(ratelimiter.GinRatelimiterConfig{
+		// config: how to generate a limit key
+		LimitKey: func(c *gin.Context) string {
+			return c.ClientIP()
+		},
+		// config: how to respond when limiting
+		LimitedHandler: func(c *gin.Context) {
+			c.JSON(200, "too many requests!!!")
+			c.Abort()
+			return
+		},
+		// config: return ratelimiter token fill interval and bucket size
+		TokenBucketConfig: func(*gin.Context) (time.Duration, int) {
+			return time.Second * 1, 1
+		},
+	}))
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, "hi")
 	})
@@ -45,22 +62,44 @@ func main() {
 }
 ```
 
-**GinRedisRatelimiter**
+**[GinRedisRatelimiter](./example/gin_redis_ratelimiter.go)**
 
 ```
 package main
 
 import (
+	"time"
+
+	"github.com/axiaoxin-com/goutils"
 	"github.com/axiaoxin-com/ratelimiter"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 )
 
 func main() {
 	r := gin.New()
-	rdb, err := goutils.NewRedisClient(&redis.Options{})
-	// Put a token into the token bucket every 1000 * 1000 microseconds
+	// Put a token into the token bucket every 1s
 	// Maximum 1 request allowed per second
-	r.Use(ratelimiter.GinRedisRatelimiter(rdb, 1000*1000, 1))
+	rdb, err := goutils.NewRedisClient(&redis.Options{})
+	if err != nil {
+		panic(err)
+	}
+	r.Use(ratelimiter.GinRedisRatelimiter(rdb, ratelimiter.GinRatelimiterConfig{
+		// config: how to generate a limit key
+		LimitKey: func(c *gin.Context) string {
+			return c.ClientIP()
+		},
+		// config: how to respond when limiting
+		LimitedHandler: func(c *gin.Context) {
+			c.JSON(200, "too many requests!!!")
+			c.Abort()
+			return
+		},
+		// config: return ratelimiter token fill interval and bucket size
+		TokenBucketConfig: func(*gin.Context) (time.Duration, int) {
+			return time.Second * 1, 1
+		},
+	}))
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, "hi")
 	})
@@ -70,33 +109,67 @@ func main() {
 
 ## Ratelimiter can be directly used in golang program. Examples:
 
-**MemRatelimiter**
+**[MemRatelimiter](./example/mem_ratelimiter.go)**
 
 ```
-conf := ratelimiter.BucketConfig{
-    Capacity:             1,
-    FillEveryMicrosecond: 1000 * 1000,
-    ExpireSecond:         60,
-}
-limiter := ratelimiter.NewMemRatelimiter(conf)
-ctx := context.TODO()
-if limiter.Allow(ctx, "somekey") {
-    // do something
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/axiaoxin-com/ratelimiter"
+)
+
+func main() {
+	limiter := ratelimiter.NewMemRatelimiter()
+	limitKey := "uniq_limit_key"
+	tokenFillInterval := time.Second * 1
+	bucketSize := 1
+	for i := 0; i < 3; i++ {
+		// 1st and 3nd is allowed
+		if i == 2 {
+			time.Sleep(time.Second * 1)
+		}
+		isAllow := limiter.Allow(context.TODO(), limitKey, tokenFillInterval, bucketSize)
+		fmt.Println(i, time.Now(), isAllow)
+	}
 }
 ```
 
-**RedisRatelimiter**
+**[RedisRatelimiter](./example/redis_ratelimiter.go)**
 
 ```
-conf := BucketConfig{
-    Capacity:             1,
-    FillEveryMicrosecond: 1000 * 1000,
-    ExpireSecond:         60 * 5,
-}
-rdb, _ := goutils.NewRedisClient(&redis.Options{})
-limiter := NewRedisRatelimiter(rdb, conf)
-ctx := context.Background()
-if limiter.Allow(ctx, "key") {
-    // do something
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/axiaoxin-com/goutils"
+	"github.com/axiaoxin-com/ratelimiter"
+	"github.com/go-redis/redis/v8"
+)
+
+func main() {
+	rdb, err := goutils.NewRedisClient(&redis.Options{})
+	if err != nil {
+		panic(err)
+	}
+
+	limiter := ratelimiter.NewRedisRatelimiter(rdb)
+	limitKey := "uniq_limit_key"
+	tokenFillInterval := time.Second * 1
+	bucketSize := 1
+	for i := 0; i < 3; i++ {
+		// 1st and 3nd is allowed
+		if i == 2 {
+			time.Sleep(time.Second * 1)
+		}
+		isAllow := limiter.Allow(context.TODO(), limitKey, tokenFillInterval, bucketSize)
+		fmt.Println(i, time.Now(), isAllow)
+	}
 }
 ```
