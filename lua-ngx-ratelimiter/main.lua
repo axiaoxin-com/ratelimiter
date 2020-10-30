@@ -25,7 +25,7 @@ local function main()
             msg = "当前请求命中黑名单",
         }
         ngx.say(json.encode(rsp))
-        ngx.exit(ngx.HTTP_OK)
+        ngx.exit(ngx.HTTP_FORBIDDEN)
     end
 
     -- 检查 caller 参数是否在白名单中，在则直接放行
@@ -51,7 +51,7 @@ local function main()
             msg = "请求的次数超过了频率限制",
         }
         ngx.say(json.encode(rsp))
-        ngx.exit(ngx.HTTP_OK)
+        ngx.exit(ngx.HTTP_TOO_MANY_REQUESTS)
     end
 end
 

@@ -18,4 +18,4 @@ services:
   - redis
 
 script:
-  - go test -race -coverprofile=coverage.txt -covermode=atomic -v .
+  - go test -race -coverprofile=coverage.txt -covermode=atomic -v ./
