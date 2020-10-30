@@ -4,6 +4,8 @@
 local redis = require "resty.redis"
 local redis_config = require "redis_config"
 local bucket_config = require "token_bucket_config"
+local utils = require "utils"
+
 
 local _M = {}
 
@@ -75,7 +77,7 @@ function _M:is_limited()
             ",bucket_capacity:" .. self.bucket_capacity .. ",expire_second:" .. self.expire_second)
     local res, err = red:eval(self.script, 1, self.key, self.bucket_capacity, self.fill_count, self.interval_microsecond, self.expire_second)
     if err ~= nil then
-        ngx.log(ngx.ERR, "ratelimiter: redis eval err:" .. err )
+        ngx.log(ngx.ERR, "ratelimiter: redis eval err:" .. err)
         return false
     elseif res == nil then
         ngx.log(ngx.ERR, "ratelimiter: redis eval return nil res")
@@ -90,15 +92,22 @@ function _M:is_limited()
     end
 
     -- 处理脚本返回结果
-    if res == 1 then
-        ngx.log(ngx.ERR, "ratelimiter: hit! key=" .. self.key .. " is limited on threshold=" .. self.bucket_capacity .. " interval_microsecond=", self.interval_microsecond)
+    local jsondata = utils.json_decode(res)
+    if jsondata == nil then
+        ngx.log(ngx.ERR, "ratelimiter: redis eval return json decode failed:", res)
+        return false
+    end
+    if jsondata['is_limited'] == true then
+        ngx.log(ngx.ERR, "ratelimiter: hit! key=" .. self.key .. " is limited on threshold=" .. self.bucket_capacity .. " interval_microsecond=", self.interval_microsecond, " res=", res)
         return true
     end
 
     return false
 end
 
+
 -- 需要在 redis 中使用 eval 执行的 lua 脚本内容
+-- eval 的脚本只能单个值，因此返回 json 字符串. is_limited： false不限频， true限频
 _M.script = [[
     -- 兼容低版本 redis 手动打开允许随机写入 （执行 TIME 指令获取时间）
     -- 避免报错 Write commands not allowed after non deterministic commands. Call redis.replicate_commands() at the start of your script in order to switch to single commands         replication mode.
@@ -117,6 +126,10 @@ _M.script = [[
     local p_fill_count = tonumber(ARGV[2])
     local p_interval_microsecond = tonumber(ARGV[3])
     local p_expire_second = tonumber(ARGV[4])
+
+    -- 返回结果
+    local result = {}
+    result['key'] = p_key
 
     -- 判断桶是否存在
     local exists = redis.call("EXISTS", p_key)
@@ -138,7 +151,15 @@ _M.script = [[
         redis.call("EXPIRE", p_key, p_expire_second)
         redis.log(redis.LOG_DEBUG, "ratelimiter: call HMSET for creating bucket")
         redis.log(redis.LOG_DEBUG, "------------ ratelimiter script end ------------")
-        return 0
+
+        -- 保存 result 信息
+        result['msg'] = "key not exists in redis"
+        -- string format 避免科学计数法
+        result['last_consume_timestamp'] = string.format("%18.0f", last_consume_timestamp)
+        result['remain_token_count'] = remain_token_count
+        result['is_limited'] = false
+
+        return cjson.encode(result)
     end
 
     -- 桶存在时，重新计算填充 token
@@ -147,7 +168,12 @@ _M.script = [[
     if array == nil then
         redis.log(redis.LOG_WARNING, "ratelimiter: HMGET return nil for key:" .. p_key)
         redis.log(redis.LOG_DEBUG, "------------ ratelimiter script end ------------")
-        return 0
+
+        -- 保存 result 信息
+        result['msg'] = "err:HMGET data return nil"
+        result['is_limited'] = false
+
+        return cjson.encode(result)
     end
     local last_consume_timestamp, remain_token_count = tonumber(array[1]), tonumber(array[2])
     redis.log(redis.LOG_DEBUG, "ratelimiter: last_consume_timestamp:" .. last_consume_timestamp .. ", remain_token_count:" .. remain_token_count)
@@ -166,15 +192,27 @@ _M.script = [[
     redis.log(redis.LOG_DEBUG, "ratelimiter: fill_token_count:" .. fill_token_count .. ", now_token_count:" .. now_token_count)
 
 
+    -- 保存 debug 信息
+    result['last_consume_timestamp'] = string.format("%18.0f", last_consume_timestamp)
+    result['remain_token_count'] = remain_token_count
+    result['now_timestamp'] = string.format("%18.0f", now_timestamp)
+    result['duration_microsecond'] = string.format("%18.0f", duration_microsecond)
+    result['fill_rate'] = string.format("%18.9f", fill_rate)
+    result['fill_token_count'] = fill_token_count
+    result['now_token_count'] = now_token_count
+
+
     -- 无可用 token ， 返回 1 限流
     if now_token_count <= 0 then
-        -- 更新 redis 中的数据，被限流不消耗 now_token_count，不重置上次填充时间
+        -- 更新 redis 中的数据，被限流不消耗 now_token_count
         redis.call("HMSET", p_key, "last_consume_timestamp", last_consume_timestamp, "remain_token_count", now_token_count)
         -- 设置 redis 的过期时间
         redis.call("EXPIRE", p_key, p_expire_second)
         redis.log(redis.LOG_DEBUG, "ratelimiter: call HMSET for updating bucket")
         redis.log(redis.LOG_DEBUG, "------------ ratelimiter script end ------------")
-        return 1
+        result['msg'] = "limit"
+        result['is_limited'] = true
+        return cjson.encode(result)
     end
 
     -- 更新 redis 中的数据, 消耗一个 token
@@ -183,7 +221,9 @@ _M.script = [[
     redis.call("EXPIRE", p_key, p_expire_second)
     redis.log(redis.LOG_DEBUG, "ratelimiter: call HMSET for updating bucket")
     redis.log(redis.LOG_DEBUG, "------------ ratelimiter script end ------------")
-    return 0
+    result['msg'] = "pass"
+    result['is_limited'] = false
+    return cjson.encode(result)
 ]]
 
 return _M

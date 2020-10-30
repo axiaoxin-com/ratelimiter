@@ -1,2 +1,2 @@
-# rm ./logs/error.log
+rm ./logs/error.log
 openresty -s reload
