@@ -13,23 +13,23 @@ local _M = {}
 function _M:new(limit_key)
     ngx.log(ngx.INFO, "ratelimiter: new token bucket module for key=" .. limit_key.key)
     local o = {}
-    setmetatable(o, self)
-    self.__index = self
-    self.key = limit_key.key
+    setmetatable(o, {__index = self})
+
+    o.key = limit_key.key
 
     local default_config = bucket_config['default']
-    self.fill_count = default_config.fill_count
-    self.interval_microsecond = default_config.interval_microsecond
-    self.bucket_capacity = default_config.bucket_capacity
-    self.expire_second = default_config.expire_second
+    o.fill_count = default_config.fill_count
+    o.interval_microsecond = default_config.interval_microsecond
+    o.bucket_capacity = default_config.bucket_capacity
+    o.expire_second = default_config.expire_second
 
     local special_config_name = limit_key.caller .. ":" .. limit_key.api_name
     local special_config = bucket_config[special_config_name]
     if special_config ~= nil then
-        self.fill_count = special_config.fill_count
-        self.interval_microsecond = special_config.interval_microsecond
-        self.bucket_capacity = special_config.bucket_capacity
-        self.expire_second = special_config.expire_second
+        o.fill_count = special_config.fill_count
+        o.interval_microsecond = special_config.interval_microsecond
+        o.bucket_capacity = special_config.bucket_capacity
+        o.expire_second = special_config.expire_second
     end
 
     return o

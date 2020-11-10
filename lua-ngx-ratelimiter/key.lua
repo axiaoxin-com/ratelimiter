@@ -15,8 +15,7 @@ local _M = {
 function _M:new()
     ngx.log(ngx.DEBUG, "ratelimiter: new key module")
     local o = {}
-    setmetatable(o, self)
-    self.__index = self
+    setmetatable(o, {__index = self})
 
     local host = utils.str_split(ngx.var.host, ".")[1]
     local client_ip = utils.get_client_ip() or ""
@@ -36,11 +35,11 @@ function _M:new()
         end
     end
 
-    self.api_name = api_name
-    self.caller = caller
-    self.client_ip = client_ip
-    self.key = self.prefix .. self.separator .. host .. self.separator .. api_name .. self.separator .. caller .. self.separator .. client_ip
-    ngx.log(ngx.INFO, "ratelimiter: gen a new limit key -> " .. self.key)
+    o.api_name = api_name
+    o.caller = caller
+    o.client_ip = client_ip
+    o.key = o.prefix .. o.separator .. host .. o.separator .. api_name .. o.separator .. caller .. o.separator .. client_ip
+    ngx.log(ngx.INFO, "ratelimiter: gen a new limit key -> " .. o.key)
 	return o
 end
 
