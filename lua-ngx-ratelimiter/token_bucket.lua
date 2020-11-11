@@ -107,7 +107,7 @@ end
 
 
 -- 需要在 redis 中使用 eval 执行的 lua 脚本内容
--- eval 的脚本只能单个值，因此返回 json 字符串. is_limited： false不限频， true限频
+-- eval 的脚本只能单个值，因此返回 json 字符串. is_limited ： false 不限频， true 限频
 _M.script = [[
     -- 兼容低版本 redis 手动打开允许随机写入 （执行 TIME 指令获取时间）
     -- 避免报错 Write commands not allowed after non deterministic commands. Call redis.replicate_commands() at the start of your script in order to switch to single commands         replication mode.
@@ -129,7 +129,18 @@ _M.script = [[
 
     -- 返回结果
     local result = {}
-    result['key'] = p_key
+    result['p_key'] = p_key
+    result['p_fill_count'] = p_fill_count
+    result['p_bucket_capacity'] = p_bucket_capacity
+    result['p_interval_microsecond'] = p_interval_microsecond
+    result['p_expire_second'] = p_expire_second
+
+    -- 每次填充 token 数为 0 或 令牌桶容量为 0 则表示限制该请求 直接返回 无需操作 redis
+    if p_fill_count <= 0 or p_bucket_capacity <= 0 then
+        result['msg'] = "be limited by p_fill_count or p_bucket_capacity"
+        result['is_limited'] = true
+        return cjson.encode(result)
+    end
 
     -- 判断桶是否存在
     local exists = redis.call("EXISTS", p_key)
@@ -137,7 +148,7 @@ _M.script = [[
 
     -- 首次请求 桶不存在则在 redis 中创建桶 并消耗当前 token
     if exists == 0 then
-        -- 本次填充时间戳（秒）
+        -- 本次填充时间戳
         local now_timestamp_array = redis.call("TIME")
         -- 微秒级时间戳
         local last_consume_timestamp = tonumber(now_timestamp_array[1]) * 1000000 + tonumber(now_timestamp_array[2])
