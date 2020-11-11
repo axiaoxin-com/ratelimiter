@@ -213,7 +213,7 @@ _M.script = [[
     result['now_token_count'] = now_token_count
 
 
-    -- 无可用 token ， 返回 1 限流
+    -- 无可用 token
     if now_token_count <= 0 then
         -- 更新 redis 中的数据，被限流不消耗 now_token_count
         redis.call("HMSET", p_key, "last_consume_timestamp", last_consume_timestamp, "remain_token_count", now_token_count)
