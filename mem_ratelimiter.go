@@ -36,9 +36,9 @@ func NewMemRatelimiter() *MemRatelimiter {
 // tokenFillInterval 每隔多长时间往桶中放一个 Token
 // bucketSize 代表 Token 桶的容量大小
 func (r *MemRatelimiter) Allow(ctx context.Context, key string, tokenFillInterval time.Duration, bucketSize int) bool {
-	// 参数小于 0 时不限制
+	// 参数小于等于 0 时直接限制
 	if tokenFillInterval.Seconds() <= 0 || bucketSize <= 0 {
-		return true
+		return false
 	}
 
 	tokenRate := rate.Every(tokenFillInterval)

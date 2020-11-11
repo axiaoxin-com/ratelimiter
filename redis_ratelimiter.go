@@ -31,6 +31,11 @@ func NewRedisRatelimiter(rdb *redis.Client) *RedisRatelimiter {
 
 // Allow 判断给定 key 是否被允许
 func (r *RedisRatelimiter) Allow(ctx context.Context, key string, tokenFillInterval time.Duration, bucketSize int) bool {
+	// 参数小于等于 0 时直接限制
+	if tokenFillInterval.Seconds() <= 0 || bucketSize <= 0 {
+		return false
+	}
+
 	// 构造 lua 脚本参数
 	keys := []string{key}
 	args := []interface{}{
