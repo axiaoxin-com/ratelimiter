@@ -146,7 +146,7 @@ _M.script = [[
     local exists = redis.call("EXISTS", p_key)
     redis.log(redis.LOG_DEBUG, "ratelimiter: key:" .. p_key .. ", exists:" .. exists)
 
-    -- 首次请求 桶不存在则在 redis 中创建桶 并消耗当前 token
+    -- 桶不存在则在 redis 中创建桶 并消耗当前 token
     if exists == 0 then
         -- 本次填充时间戳
         local now_timestamp_array = redis.call("TIME")

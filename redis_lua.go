@@ -3,7 +3,7 @@ package ratelimiter
 import "github.com/go-redis/redis/v8"
 
 // redis 中执行的 lua 脚本判断 key 是否应该被限频
-// 返回 0：无需限频 1：需限频
+// 返回 json 字符串： is_limited false:无需限频，true:需限频
 var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
     -- 兼容低版本 redis 手动打开允许随机写入 （执行 TIME 指令获取时间）
     -- 避免报错 Write commands not allowed after non deterministic commands. Call redis.replicate_commands() at the start of your script in order to switch to single commands         replication mode.
@@ -23,13 +23,28 @@ var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
     local p_interval_microsecond = tonumber(ARGV[3])
     local p_expire_second = tonumber(ARGV[4])
 
+    -- 返回结果
+    local result = {}
+    result['p_key'] = p_key
+    result['p_fill_count'] = p_fill_count
+    result['p_bucket_capacity'] = p_bucket_capacity
+    result['p_interval_microsecond'] = p_interval_microsecond
+    result['p_expire_second'] = p_expire_second
+
+    -- 每次填充 token 数为 0 或 令牌桶容量为 0 则表示限制该请求 直接返回 无需操作 redis
+    if p_fill_count <= 0 or p_bucket_capacity <= 0 then
+        result['msg'] = "be limited by p_fill_count or p_bucket_capacity"
+        result['is_limited'] = true
+        return cjson.encode(result)
+    end
+
     -- 判断桶是否存在
     local exists = redis.call("EXISTS", p_key)
     redis.log(redis.LOG_DEBUG, "ratelimiter: key:" .. p_key .. ", exists:" .. exists)
 
-    -- 首次请求 桶不存在则在 redis 中创建桶 并消耗当前 token
+    -- 桶不存在则在 redis 中创建桶 并消耗当前 token
     if exists == 0 then
-        -- 本次填充时间戳（秒）
+        -- 本次填充时间戳
         local now_timestamp_array = redis.call("TIME")
         -- 微秒级时间戳
         local last_consume_timestamp = tonumber(now_timestamp_array[1]) * 1000000 + tonumber(now_timestamp_array[2])
@@ -43,7 +58,15 @@ var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
         redis.call("EXPIRE", p_key, p_expire_second)
         redis.log(redis.LOG_DEBUG, "ratelimiter: call HMSET for creating bucket")
         redis.log(redis.LOG_DEBUG, "------------ ratelimiter script end ------------")
-        return 0
+
+        -- 保存 result 信息
+        result['msg'] = "key not exists in redis"
+        -- string format 避免科学计数法
+        result['last_consume_timestamp'] = string.format("%18.0f", last_consume_timestamp)
+        result['remain_token_count'] = remain_token_count
+        result['is_limited'] = false
+
+        return cjson.encode(result)
     end
 
     -- 桶存在时，重新计算填充 token
@@ -52,7 +75,12 @@ var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
     if array == nil then
         redis.log(redis.LOG_WARNING, "ratelimiter: HMGET return nil for key:" .. p_key)
         redis.log(redis.LOG_DEBUG, "------------ ratelimiter script end ------------")
-        return 0
+
+        -- 保存 result 信息
+        result['msg'] = "err:HMGET data return nil"
+        result['is_limited'] = false
+
+        return cjson.encode(result)
     end
     local last_consume_timestamp, remain_token_count = tonumber(array[1]), tonumber(array[2])
     redis.log(redis.LOG_DEBUG, "ratelimiter: last_consume_timestamp:" .. last_consume_timestamp .. ", remain_token_count:" .. remain_token_count)
@@ -71,15 +99,27 @@ var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
     redis.log(redis.LOG_DEBUG, "ratelimiter: fill_token_count:" .. fill_token_count .. ", now_token_count:" .. now_token_count)
 
 
-    -- 无可用 token ， 返回 1 限流
+    -- 保存 debug 信息
+    result['last_consume_timestamp'] = string.format("%18.0f", last_consume_timestamp)
+    result['remain_token_count'] = remain_token_count
+    result['now_timestamp'] = string.format("%18.0f", now_timestamp)
+    result['duration_microsecond'] = string.format("%18.0f", duration_microsecond)
+    result['fill_rate'] = string.format("%18.9f", fill_rate)
+    result['fill_token_count'] = fill_token_count
+    result['now_token_count'] = now_token_count
+
+
+    -- 无可用 token
     if now_token_count <= 0 then
-        -- 更新 redis 中的数据，被限流不消耗 now_token_count，不重置上次填充时间
+        -- 更新 redis 中的数据，被限流不消耗 now_token_count
         redis.call("HMSET", p_key, "last_consume_timestamp", last_consume_timestamp, "remain_token_count", now_token_count)
         -- 设置 redis 的过期时间
         redis.call("EXPIRE", p_key, p_expire_second)
         redis.log(redis.LOG_DEBUG, "ratelimiter: call HMSET for updating bucket")
         redis.log(redis.LOG_DEBUG, "------------ ratelimiter script end ------------")
-        return 1
+        result['msg'] = "limit"
+        result['is_limited'] = true
+        return cjson.encode(result)
     end
 
     -- 更新 redis 中的数据, 消耗一个 token
@@ -88,5 +128,7 @@ var tokenBucketRedisLuaIsLimitedScript = redis.NewScript(`
     redis.call("EXPIRE", p_key, p_expire_second)
     redis.log(redis.LOG_DEBUG, "ratelimiter: call HMSET for updating bucket")
     redis.log(redis.LOG_DEBUG, "------------ ratelimiter script end ------------")
-    return 0
+    result['msg'] = "pass"
+    result['is_limited'] = false
+    return cjson.encode(result)
 `)

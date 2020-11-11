@@ -6,6 +6,8 @@ import (
 
 	"github.com/axiaoxin-com/logging"
 	"github.com/go-redis/redis/v8"
+	jsoniter "github.com/json-iterator/go"
+	"go.uber.org/zap"
 )
 
 var (
@@ -45,13 +47,14 @@ func (r *RedisRatelimiter) Allow(ctx context.Context, key string, tokenFillInter
 		logging.Error(ctx, "RedisRatelimiter run script error:"+err.Error())
 		return true
 	}
-	isLimited, ok := v.(int64)
+	resultJSON, ok := v.(string)
 	if !ok {
-		logging.Error(ctx, "RedisRatelimiter assert script result error")
+		logging.Error(ctx, "RedisRatelimiter assert script result error", zap.Any("result", v))
 		return true
 	}
-	// 1 表示被限频，返回 false 不允许本次操作
-	if isLimited == 1 {
+	isLimited := jsoniter.Get([]byte(resultJSON), "is_limited").ToBool()
+	// logging.Debug(ctx, "redis eval return json", zap.String("result", resultJSON))
+	if isLimited {
 		return false
 	}
 	return true
