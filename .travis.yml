@@ -17,5 +17,6 @@ env:
 services:
   - redis
 
-script:
-  - go test -race -coverprofile=coverage.txt -covermode=atomic -v ./
+install: go mod tidy
+
+script: go test -race  -v .
