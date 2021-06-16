@@ -13,11 +13,9 @@ func GinMemRatelimiter(conf GinRatelimiterConfig) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		// 获取 limit key
-		var limitKey string
+		limitKey := DefaultGinLimitKey(c)
 		if conf.LimitKey != nil {
 			limitKey = conf.LimitKey(c)
-		} else {
-			limitKey = DefaultGinLimitKey(c)
 		}
 
 		limitedHandler := DefaultGinLimitedHandler

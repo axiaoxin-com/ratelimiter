@@ -13,11 +13,9 @@ func GinRedisRatelimiter(rdb *redis.Client, conf GinRatelimiterConfig) gin.Handl
 	limiter := NewRedisRatelimiter(rdb)
 	return func(c *gin.Context) {
 		// 获取 limit key
-		var limitKey string
+		limitKey := DefaultGinLimitKey(c)
 		if conf.LimitKey != nil {
 			limitKey = conf.LimitKey(c)
-		} else {
-			limitKey = DefaultGinLimitKey(c)
 		}
 
 		limitedHandler := DefaultGinLimitedHandler
