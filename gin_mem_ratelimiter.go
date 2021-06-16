@@ -1,13 +1,14 @@
 package ratelimiter
 
 import (
-	"time"
-
 	"github.com/gin-gonic/gin"
 )
 
 // GinMemRatelimiter 按配置信息生成进程内存限频中间件
 func GinMemRatelimiter(conf GinRatelimiterConfig) gin.HandlerFunc {
+	if conf.TokenBucketConfig == nil {
+		panic("GinRatelimiterConfig must implement the TokenBucketConfig callback function")
+	}
 	limiter := NewMemRatelimiter()
 
 	return func(c *gin.Context) {
@@ -16,19 +17,15 @@ func GinMemRatelimiter(conf GinRatelimiterConfig) gin.HandlerFunc {
 		if conf.LimitKey != nil {
 			limitKey = conf.LimitKey(c)
 		} else {
-			limitKey = defaultGinLimitKey(c)
+			limitKey = DefaultGinLimitKey(c)
 		}
 
-		limitedHandler := defaultGinLimitedHandler
+		limitedHandler := DefaultGinLimitedHandler
 		if conf.LimitedHandler != nil {
 			limitedHandler = conf.LimitedHandler
 		}
 
-		var tokenFillInterval time.Duration
-		var bucketSize int
-		if conf.TokenBucketConfig != nil {
-			tokenFillInterval, bucketSize = conf.TokenBucketConfig(c)
-		}
+		tokenFillInterval, bucketSize := conf.TokenBucketConfig(c)
 
 		if !limiter.Allow(c, limitKey, tokenFillInterval, bucketSize) {
 			limitedHandler(c)

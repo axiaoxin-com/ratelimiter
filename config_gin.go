@@ -8,13 +8,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// defaultGinLimitKey 使用客户端 IP 生成默认的限频 key
-func defaultGinLimitKey(c *gin.Context) string {
+// DefaultGinLimitKey 使用客户端 IP 生成默认的限频 key
+func DefaultGinLimitKey(c *gin.Context) string {
 	return fmt.Sprintf("pink-lady:ratelimiter:%s", c.ClientIP())
 }
 
-// defaultGinLimitedHandler 限频触发返回 429
-func defaultGinLimitedHandler(c *gin.Context) {
+// DefaultGinLimitedHandler 限频触发返回 429
+func DefaultGinLimitedHandler(c *gin.Context) {
 	c.AbortWithStatus(http.StatusTooManyRequests)
 }
 
