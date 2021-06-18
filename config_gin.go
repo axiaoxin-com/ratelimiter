@@ -10,7 +10,7 @@ import (
 
 // DefaultGinLimitKey 使用客户端 IP 生成默认的限频 key
 func DefaultGinLimitKey(c *gin.Context) string {
-	return fmt.Sprintf("pink-lady:ratelimiter:%s", c.ClientIP())
+	return fmt.Sprintf("pink-lady:ratelimiter:%s:%s", c.ClientIP(), c.FullPath())
 }
 
 // DefaultGinLimitedHandler 限频触发返回 429
